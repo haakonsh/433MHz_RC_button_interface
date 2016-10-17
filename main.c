@@ -33,7 +33,6 @@
 #include "nrf_ppi.h"
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
-#include "nrf_drv_rtc.h"
 #include "433_MHz_RC_button_interface.h"
 
 /**
@@ -55,7 +54,9 @@ int main(void)
 
     while (1)
     {
-        rc_button_handler(message);
+        __WFE();    //replace with the soft_device sleep function.
+        __SEV();
+        __WFE();
     }
 }
 

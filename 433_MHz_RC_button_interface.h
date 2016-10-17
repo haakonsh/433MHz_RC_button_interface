@@ -5,7 +5,8 @@
 #include "nrf_drv_gpiote.h"
 
 #define CLK                             1480        //us
-#define bit_sample_offset               (CLK/2      //us
+#define bit_sample_offset               (CLK/2)      //us
+#define INPUT_PIN                       29
 
 #define RC_BUTTON_PREAMBLE              0x80000000  //from EV1527 OTP Encoder protocol spec
 #define PREAMBLE_LENGTH                 32          //from EV1527 OTP Encoder protocol spec
@@ -50,8 +51,6 @@ struct buffer_t{
     uint16_t data;               // data bits 0:3
  };
 
- bool message[24];                                   //boolean array containing the Control and Data bits
-
 // function converts ms to rtc tick units
 uint32_t us_to_ticks_convert(uint32_t);
 
@@ -59,7 +58,7 @@ uint32_t us_to_ticks_convert(uint32_t);
 void rc_button_init(void);
 
 // function collects the bit stream and places it into their respective buffers
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, struct buffer_t * buffer_p);
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buffer_p);
 
 // interrupt handler called by the rtc half-way between each clock sycle.
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type);

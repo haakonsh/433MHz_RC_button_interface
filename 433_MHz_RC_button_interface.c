@@ -15,17 +15,16 @@
 const uint16_t DATA_H =                 0xE;        //from EV1527 OTP Encoder protocol spec
 const uint16_t DATA_L =                 0x8;        //from EV1527 OTP Encoder protocol spec
 
-const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(2); /**< Declaring an instance of nrf_drv_rtc for RTC2. */
-nrf_drv_gpiote_pin_t rc_button_pin =    13;         // input pin
+const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(1); /**< Declaring an instance of nrf_drv_rtc for RTC1. */
+nrf_drv_gpiote_pin_t rc_button_pin =    INPUT_PIN;  // input pin
 
-struct buffer_t buffer;
+volatile struct buffer_t buffer = {0};
 bool message[24];                                   //boolean array containing the Control and Data bits
 
-uint32_t control_msk[20] =  {0};                    //bitmasks used to extract control bits C0:C19
-uint32_t data_msk[4] =      {0};                    //bitmasks used to extract data bits D0:D3
+uint32_t control_msk[20];                           //bitmasks used to extract control bits C0:C19
+uint32_t data_msk[4];                               //bitmasks used to extract data bits D0:D3
 
 volatile bool transfer_done =           false;      // check to signal that the transfer buffers are filled
-
 
 uint32_t us_to_ticks_convert(uint32_t time_us)
 {
@@ -42,9 +41,9 @@ uint32_t us_to_ticks_convert(uint32_t time_us)
 void rc_button_init(void)
 {
     ret_code_t err_code;
-    uint32_t rtc_task_addr;
+    uint32_t rtc_task_addr, rtc_evt_addr;
     uint32_t gpiote_evt_addr;
-    nrf_ppi_channel_t ppi_channel;
+    nrf_ppi_channel_t ppi_channel_1, ppi_channel_2;
 
     nrf_drv_gpiote_in_config_t rc_button_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
     rc_button_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
@@ -52,23 +51,34 @@ void rc_button_init(void)
     err_code = nrf_drv_gpiote_in_init(rc_button_pin, &rc_button_pin_cfg, NULL);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel);
+    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_1);
+    APP_ERROR_CHECK(err_code);
+    
+    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_2);
     APP_ERROR_CHECK(err_code);
 
     rtc_task_addr = nrf_drv_rtc_task_address_get(&RTC_RC_BUTTON, NRF_RTC_TASK_START);
     gpiote_evt_addr = nrf_drv_gpiote_in_event_addr_get(rc_button_pin);
 
-    err_code = nrf_drv_ppi_channel_assign(ppi_channel, gpiote_evt_addr, rtc_task_addr);
+    err_code = nrf_drv_ppi_channel_assign(ppi_channel_1, gpiote_evt_addr, rtc_task_addr);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_drv_ppi_channel_enable(ppi_channel);
+    rtc_task_addr = nrf_drv_rtc_task_address_get(&RTC_RC_BUTTON, NRF_RTC_TASK_CLEAR);
+    rtc_evt_addr = nrf_drv_rtc_event_address_get(&RTC_RC_BUTTON, NRF_RTC_EVENT_COMPARE_1);
+    
+    err_code = nrf_drv_ppi_channel_assign(ppi_channel_2, rtc_evt_addr, rtc_task_addr);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
+    APP_ERROR_CHECK(err_code);
+    
+    err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
     APP_ERROR_CHECK(err_code);
 
     nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
-
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, struct buffer_t * buffer_p){
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buffer_p){
     uint32_t pin =              0;
     uint16_t bitmask =          0;
     static volatile uint8_t i = 1;
@@ -80,42 +90,37 @@ void buffer_sort(nrf_drv_rtc_int_type_t int_type, struct buffer_t * buffer_p){
             pin = nrf_gpio_pin_read(rc_button_pin);
 
             if(i <= PREAMBLE_LENGTH){                                                                                   // Preamble
-                bitmask = ~(1 << i);
-                buffer.preamble &= (pin | bitmask);
+                bitmask = ~(1 << (i - 1));
+                buffer.preamble |= (pin | bitmask);
             }
             if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH_0))){                                   // Control bits 0:7
                 bitmask = ~(1 << (i - PREAMBLE_LENGTH));
-                buffer.control_0 &= (pin | bitmask);
+                buffer.control_0 |= (pin | bitmask);
             }
             if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH_0 + CONTROL_LENGTH_1))){                // Control bits 8:15
                 bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH_0)));
-                buffer.control_1 &= (pin | bitmask);
+                buffer.control_1 |= (pin | bitmask);
             }
             if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH))){                                     // Control bits 16:19
                 bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH_0 + CONTROL_LENGTH_1)));
-                buffer.control_2 &= (pin | bitmask);
+                buffer.control_2 |= (pin | bitmask);
             }
             if((i > (PREAMBLE_LENGTH + CONTROL_LENGTH)) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH))){    // Data bits 0:3
                 bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH)));
-                buffer.data &= (pin | bitmask);
+                buffer.data |= (pin | bitmask);
             }
             if(i > (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)){
                 i = 1;
                 NRF_RTC2->TASKS_STOP = 1;
-                transfer_done = true;
+                NRF_RTC2->TASKS_CLEAR = 1;
                 bitmask =  0;
+                rc_button_handler(message);
             }
             i++;
             break;
 
         case NRF_DRV_RTC_INT_COMPARE1:
-            nrf_drv_rtc_counter_clear(&RTC_RC_BUTTON);
-            if(i > (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)){
-                i = 0;
-                NRF_RTC2->TASKS_STOP = 1;
-                nrf_drv_rtc_counter_clear(&RTC_RC_BUTTON);
-                transfer_done = true;
-            }
+            
             break;
 
         default:
@@ -127,7 +132,7 @@ void buffer_sort(nrf_drv_rtc_int_type_t int_type, struct buffer_t * buffer_p){
 
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
 {
-    buffer_sort(int_type,&buffer);
+    buffer_sort(int_type, &buffer);
 }
 
 
@@ -143,10 +148,10 @@ void rtc_init(void)
     APP_ERROR_CHECK(err_code);
 
     //Enable tick event & interrupt
-    nrf_drv_rtc_tick_enable(&RTC_RC_BUTTON,true);
+    nrf_drv_rtc_tick_enable(&RTC_RC_BUTTON, true);
 
     // Set compare channel to trigger interrupts
-    rtc_ticks = us_to_ticks_convert(bit_sample_offset)
+    rtc_ticks = us_to_ticks_convert(bit_sample_offset);
     err_code = nrf_drv_rtc_cc_set(&RTC_RC_BUTTON, 0, rtc_ticks, true);
     APP_ERROR_CHECK(err_code);
 
@@ -159,9 +164,9 @@ void rtc_init(void)
 }
 
 
-void bitmasks_init(void){                       // creates bitmaks for reading 4 bits (15 = 0b1111)
+void bitmasks_init(void){                        // creates bitmaks for reading 4 bits (15 = 0b1111)
 
-    for(uint8_t j = 0; j <= 7; j++){            // bitmasks for the control_0 buffer
+    for(uint8_t j = 0; j <= 7; j++){             // bitmasks for the control_0 buffer
         control_msk[j] = (15 << (4 * j));
     }
     for(uint8_t j = 0; j <= 7; j++){             // bitmasks for the control_1 buffer
@@ -176,16 +181,8 @@ void bitmasks_init(void){                       // creates bitmaks for reading 4
 }
 
 
-void rc_button_handler(bool * message_p)
+void rc_button_handler(bool *message_p)
 {
-
-    while(!transfer_done)           // blocking sleep mode. Can be replaced with a SWI calling rc_button_handler
-    {
-        __WFE();
-        __SEV();
-        __WFE();
-    }
-
     if(buffer.preamble != RC_BUTTON_PREAMBLE){
         //Error handling
     }
@@ -209,7 +206,4 @@ void rc_button_handler(bool * message_p)
     buffer.control_1 =  0;
     buffer.control_2 =  0;
     buffer.data =       0;
-
-    transfer_done = false;  // enable next transfer
-
 }
