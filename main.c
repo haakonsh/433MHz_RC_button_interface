@@ -26,10 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nrf.h"
-#include "nrf_drv_timer.h"
 #include "nrf_gpiote.h"
 #include "app_error.h"
-#include "nrf_delay.h"
 #include "nrf_ppi.h"
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"

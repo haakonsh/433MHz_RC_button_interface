@@ -111,8 +111,8 @@ void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buf
             }
             if(i > (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)){
                 i = 1;
-                NRF_RTC2->TASKS_STOP = 1;
-                NRF_RTC2->TASKS_CLEAR = 1;
+                NRF_RTC1->TASKS_STOP = 1;
+                NRF_RTC1->TASKS_CLEAR = 1;
                 bitmask =  0;
                 rc_button_handler(message);
             }
