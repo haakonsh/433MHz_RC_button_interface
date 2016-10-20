@@ -18,7 +18,7 @@ const uint16_t DATA_L =                 0x8;        //from EV1527 OTP Encoder pr
 const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(1); /**< Declaring an instance of nrf_drv_rtc for RTC1. */
 nrf_drv_gpiote_pin_t rc_button_pin =    INPUT_PIN;  // input pin
 
-volatile struct buffer_t buffer = {0};
+volatile struct buffer_bitfields4_t buffer = {0};
 bool message[24];                                   //boolean array containing the Control and Data bits
 
 uint32_t control_msk[20];                           //bitmasks used to extract control bits C0:C19
@@ -53,7 +53,7 @@ void rc_button_init(void)
 
     err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_1);
     APP_ERROR_CHECK(err_code);
-    
+
     err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_2);
     APP_ERROR_CHECK(err_code);
 
@@ -65,62 +65,49 @@ void rc_button_init(void)
 
     rtc_task_addr = nrf_drv_rtc_task_address_get(&RTC_RC_BUTTON, NRF_RTC_TASK_CLEAR);
     rtc_evt_addr = nrf_drv_rtc_event_address_get(&RTC_RC_BUTTON, NRF_RTC_EVENT_COMPARE_1);
-    
+
     err_code = nrf_drv_ppi_channel_assign(ppi_channel_2, rtc_evt_addr, rtc_task_addr);
     APP_ERROR_CHECK(err_code);
 
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
     APP_ERROR_CHECK(err_code);
-    
+
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
     APP_ERROR_CHECK(err_code);
 
     nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buffer_p){
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_bitfields4_t * buffer_p){
     uint32_t pin =              0;
     uint16_t bitmask =          0;
-    static volatile uint8_t i = 1;
+    static volatile uint8_t i = 0;
+    static volatile uint8_t j = 31;
+
+    if(i == 0){
+        buffer_p->preamble  = 0;
+        buffer_p->control   = 0;
+        buffer_p->data      = 0;
+    }
 
     switch (int_type)
     {
         case NRF_DRV_RTC_INT_COMPARE0:
-
             pin = nrf_gpio_pin_read(rc_button_pin);
 
-            if(i <= PREAMBLE_LENGTH){                                                                                   // Preamble
-                bitmask = ~(1 << (i - 1));
-                buffer.preamble |= (pin | bitmask);
+            if(i <= PREAMBLE_LENGTH -1){}
+                buffer_p->preamble = buffer_p->preamble | (pin << j)
+                j--;
             }
-            if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH_0))){                                   // Control bits 0:7
-                bitmask = ~(1 << (i - PREAMBLE_LENGTH));
-                buffer.control_0 |= (pin | bitmask);
-            }
-            if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH_0 + CONTROL_LENGTH_1))){                // Control bits 8:15
-                bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH_0)));
-                buffer.control_1 |= (pin | bitmask);
-            }
-            if((i > PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH))){                                     // Control bits 16:19
-                bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH_0 + CONTROL_LENGTH_1)));
-                buffer.control_2 |= (pin | bitmask);
-            }
-            if((i > (PREAMBLE_LENGTH + CONTROL_LENGTH)) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH))){    // Data bits 0:3
-                bitmask = ~(1 << (i - (PREAMBLE_LENGTH + CONTROL_LENGTH)));
-                buffer.data |= (pin | bitmask);
-            }
-            if(i > (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)){
-                i = 1;
-                NRF_RTC1->TASKS_STOP = 1;
-                NRF_RTC1->TASKS_CLEAR = 1;
-                bitmask =  0;
-                rc_button_handler(message);
+            if(i >= PREAMBLE_LENGTH){
+                buffer_p->control.C0 = pin;
+                
             }
             i++;
             break;
 
         case NRF_DRV_RTC_INT_COMPARE1:
-            
+
             break;
 
         default:

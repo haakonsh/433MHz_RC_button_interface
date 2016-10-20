@@ -42,14 +42,75 @@
 #define D2                              22
 #define D3                              23
 
-//this buffer stores the decoded information in boolean arrays
-struct buffer_t{
+struct {
+    uint8_t C1  :1;
+    uint8_t C2  :1;
+    uint8_t C3  :1;
+    uint8_t C4  :1;
+    uint8_t C5  :1;
+    uint8_t C6  :1;
+    uint8_t C7  :1;
+    uint8_t C8  :1;
+    uint8_t C9  :1;
+    uint8_t C10 :1;
+    uint8_t C11 :1;
+    uint8_t C12 :1;
+    uint8_t C13 :1;
+    uint8_t C14 :1;
+    uint8_t C15 :1;
+    uint8_t C16 :1;
+    uint8_t C17 :1;
+    uint8_t C18 :1;
+    uint8_t C19 :1;
+}control_t;
+
+struct{
+    uint8_t D0 : 1;
+    uint8_t D1 : 1;
+    uint8_t D2 : 1;
+    uint8_t D3 : 1;
+}data_t
+
+struct {
+    control_t control;
+    data_t data;
+}buffer_bitfields_t;
+
+struct {
+    uint8_t C0  :4;
+    uint8_t C1  :4;
+    uint8_t C2  :4;
+    uint8_t C3  :4;
+    uint8_t C4  :4;
+    uint8_t C5  :4;
+    uint8_t C6  :4;
+    uint8_t C7  :4;
+    uint8_t C8  :4;
+    uint8_t C9  :4;
+    uint8_t C10 :4;
+    uint8_t C11 :4;
+    uint8_t C12 :4;
+    uint8_t C13 :4;
+    uint8_t C14 :4;
+    uint8_t C15 :4;
+    uint8_t C16 :4;
+    uint8_t C17 :4;
+    uint8_t C18 :4;
+    uint8_t C19 :4;
+}control4_t
+
+struct{
+    uint8_t D0 :4;
+    uint8_t D1 :4;
+    uint8_t D2 :4;
+    uint8_t D3 :4;
+}data4_t
+
+struct{
     uint32_t preamble;
-    uint32_t control_0;          // control bits 0:7
-    uint32_t control_1;          // control bits 8:15
-    uint16_t control_2;          // control bits 16:19
-    uint16_t data;               // data bits 0:3
- };
+    control4_t control;
+    data4_t data;
+}buffer_bitfields4_t
 
 // function converts ms to rtc tick units
 uint32_t us_to_ticks_convert(uint32_t);
