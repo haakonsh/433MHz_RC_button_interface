@@ -17,32 +17,6 @@
 #define DATA_H                          0xE        //from EV1527 OTP Encoder protocol spec
 #define DATA_L                          0x8        //from EV1527 OTP Encoder protocol spec
 
-
-#define C0                              0           // bit index in the boolean array
-#define C1                              1
-#define C2                              2
-#define C3                              3
-#define C4                              4
-#define C5                              5
-#define C6                              6
-#define C7                              7
-#define C8                              8
-#define C9                              9
-#define C10                             10
-#define C11                             11
-#define C12                             12
-#define C13                             13
-#define C14                             14
-#define C15                             15
-#define C16                             16
-#define C17                             17
-#define C18                             18
-#define C19                             19
-#define D0                              20
-#define D1                              21
-#define D2                              22
-#define D3                              23
-
 uint8_t is_odd(uint8_t x);
 
 typedef struct {
@@ -122,7 +96,7 @@ uint32_t us_to_ticks_convert(uint32_t);
 void rc_button_init(void);
 
 // function collects the bit stream and places it into their respective buffers
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buffer_p);
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile buffer_t * buffer_p);
 
 // interrupt handler called by the rtc half-way between each clock sycle.
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type);

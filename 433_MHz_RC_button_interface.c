@@ -76,20 +76,16 @@ void rc_button_init(void)
     nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
-void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t * buffer_p){
+void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t * buffer4_p){
     
-    uint32_t pin =                                  0;
+    uint8_t pin =                                  0;
     uint16_t bitmask =                              0;
     static volatile uint8_t i =                     0;
     static volatile uint8_t bitcounter_preamble =   31;
     static volatile uint8_t bitcounter_control =    7;
     static volatile uint8_t bitcounter_data =       3;
 
-    if(i == 0){
-        buffer_p->preamble  = 0;
-        buffer_p->control   = 0;
-        buffer_p->data      = 0;
-    }
+    if(i == 0){ buffer4_p = 0; } //clear the buffer
 
     switch (int_type)
     {
@@ -97,39 +93,30 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t 
             pin = nrf_gpio_pin_read(rc_button_pin);
             
             if(i <= PREAMBLE_LENGTH){}  // fill preamble buffer (big-endian)
-                buffer_p->preamble = buffer_p->preamble | (pin << bitcounter_preamble)                
+                buffer4_p->preamble = buffer4_p->preamble | (pin << bitcounter_preamble);                
                 bitcounter_preamble--;                
                 break;
             }
-            if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH)){       // fill control buffer (big-endian)
+            if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH))){       // fill control buffer (big-endian)
                                 
-                buffer_p->control |= (pin << bitcounter_control));
+                buffer4_p->control |= (pin << bitcounter_control));
                 bitcounter_control--;
                 
                 if(bitcounter_control == 0){
-                    buffer_p.control += 1;     // point to next byte in control buffer
+                    buffer4_p += 1;     // point to next byte in control buffer
                     bitcounter_control = 7;
                 }
                 break;            
             }
             if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH))){           // fill data buffer (big-endian)      
-                buffer_p->data |= (pin << bitcounter_data));
+                buffer4_p->data |= (pin << bitcounter_data));
                 bitcounter_data--;
                 
                 if(bitcounter_data == 0){
-                    buffer_p.data += 1;        // point to next byte in data buffer
+                    buffer4_p.data += 1;        // point to next byte in data buffer
                     bitcounter_data = 3;
                 }
-                if(i == (PACKET_LENGTH - 1)){   // prep for next transmission
-                    
-                    bitcounter_preamble =    31; // reset counters
-                    bitcounter_control =     7;
-                    bitcounter_data =        3;
-                    
-                    buffer_p.control -= 10;    // reset pointers to the start of the buffers
-                    buffer_p.data -= 1;
-                }
-               
+                              
             }
             break;
 
@@ -145,6 +132,13 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t 
     if(i >= PACKET_LENGTH){
         i = 0; // prep for next transmission
         message_received = true;
+        
+        bitcounter_preamble =    31; // reset counters
+        bitcounter_control =     7;
+        bitcounter_data =        3;
+                    
+        buffer4_p.control -= 10;    // reset pointers to the start of the buffers
+        buffer4_p.data -= 1;
     }
     
 }
@@ -157,23 +151,25 @@ void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
         //Error handling
         }
         
-        //TODO convert buffer_bitfields4_t to buffer_bitfields_t
+        bit_extraction(&buffer_4, &buffer);
+        
+        message_received = false;
     }
 }
 
 void bit_extraction(volatile buffer_bitfields4_t * buffer4_p, volatile buffer_bitfields_t * buffer_p){
     volatile static uint8_t i,j = 0;
-    // fix below
+    // fix below // Uses a pointer to iterate through the control buffer, byte by byte.
     for(i = 0;i <= CONTROL_LENGTH; i++){ 
         
         if(is_odd(i)){          
-            if(buffer4_p->control.c0 == (DATA_H << 4)){ buffer_p->control = (1 << j); }
+            if(buffer4_p->control.c_0 == (DATA_H << 4)){ buffer_p->control = (1 << j); }     // decodes lower nibble of the first byte of .control from four bits to one
             else{ buffer_p->control = (0 << k); }
        
             j++;
         }
         else{
-            if(buffer4_p->control.C1 == DATA_H){ buffer_p->control = (1 << j); }
+            if(buffer4_p->control.C_1 == DATA_H){ buffer_p->control = (1 << j); }            // decodes lower nibble of the first byte of .control from four bits to one
             else{ buffer_p->control = (0 << k); }
         }
     }
