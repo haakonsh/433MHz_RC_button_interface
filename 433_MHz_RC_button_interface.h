@@ -10,11 +10,12 @@
 
 #define RC_BUTTON_PREAMBLE              0x80000000  //from EV1527 OTP Encoder protocol spec
 #define PREAMBLE_LENGTH                 32          //from EV1527 OTP Encoder protocol spec
-#define CONTROL_LENGTH_0                32          //lowest control buffer length
-#define CONTROL_LENGTH_1                32          //middle control buffer length
-#define CONTROL_LENGTH_2                16          //highest control buffer length
 #define CONTROL_LENGTH                  80          //from EV1527 OTP Encoder protocol spec
 #define DATA_LENGTH                     16          //from EV1527 OTP Encoder protocol spec
+#define PACKET_LENGTH                   (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)
+
+#define DATA_H                          0xE        //from EV1527 OTP Encoder protocol spec
+#define DATA_L                          0x8        //from EV1527 OTP Encoder protocol spec
 
 
 #define C0                              0           // bit index in the boolean array
@@ -42,7 +43,9 @@
 #define D2                              22
 #define D3                              23
 
-struct {
+uint8_t is_odd(uint8_t x);
+
+typedef struct {
     uint8_t C1  :1;
     uint8_t C2  :1;
     uint8_t C3  :1;
@@ -64,19 +67,19 @@ struct {
     uint8_t C19 :1;
 }control_t;
 
-struct{
+typedef struct{
     uint8_t D0 : 1;
     uint8_t D1 : 1;
     uint8_t D2 : 1;
     uint8_t D3 : 1;
-}data_t
+}data_t;
 
-struct {
+typedef struct {
     control_t control;
     data_t data;
 }buffer_bitfields_t;
 
-struct {
+typedef struct {
     uint8_t C0  :4;
     uint8_t C1  :4;
     uint8_t C2  :4;
@@ -97,20 +100,20 @@ struct {
     uint8_t C17 :4;
     uint8_t C18 :4;
     uint8_t C19 :4;
-}control4_t
+}control4_t;
 
-struct{
+typedef struct{
     uint8_t D0 :4;
     uint8_t D1 :4;
     uint8_t D2 :4;
     uint8_t D3 :4;
-}data4_t
+}data4_t;
 
-struct{
+typedef struct{
     uint32_t preamble;
     control4_t control;
     data4_t data;
-}buffer_bitfields4_t
+}buffer_bitfields4_t;
 
 // function converts ms to rtc tick units
 uint32_t us_to_ticks_convert(uint32_t);
@@ -133,3 +136,5 @@ void bitmasks_init(void);
 
 // function that extracts individual bits from their respective buffer and places them into a boolean array of bits
 void rc_button_handler(bool * message_p);
+
+static inline uint8_t is_odd(uint8_t x) { return x & 1; }

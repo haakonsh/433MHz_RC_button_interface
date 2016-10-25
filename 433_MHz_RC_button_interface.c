@@ -12,14 +12,12 @@
 #include "nrf_gpiote.h"
 #include "app_error.h"
 
-const uint16_t DATA_H =                 0xE;        //from EV1527 OTP Encoder protocol spec
-const uint16_t DATA_L =                 0x8;        //from EV1527 OTP Encoder protocol spec
-
 const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(1); /**< Declaring an instance of nrf_drv_rtc for RTC1. */
 nrf_drv_gpiote_pin_t rc_button_pin =    INPUT_PIN;  // input pin
 
-volatile struct buffer_bitfields4_t buffer = {0};
-bool message[24];                                   //boolean array containing the Control and Data bits
+volatile struct buffer_bitfields4_t buffer_4    = {0};
+volatile struct buffer_bitfields_t buffer       = {0};
+volatile bool message_received = false;
 
 uint32_t control_msk[20];                           //bitmasks used to extract control bits C0:C19
 uint32_t data_msk[4];                               //bitmasks used to extract data bits D0:D3
@@ -78,11 +76,14 @@ void rc_button_init(void)
     nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_bitfields4_t * buffer_p){
-    uint32_t pin =              0;
-    uint16_t bitmask =          0;
-    static volatile uint8_t i = 0;
-    static volatile uint8_t j = 31;
+void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t * buffer_p){
+    
+    uint32_t pin =                                  0;
+    uint16_t bitmask =                              0;
+    static volatile uint8_t i =                     0;
+    static volatile uint8_t bitcounter_preamble =   31;
+    static volatile uint8_t bitcounter_control =    7;
+    static volatile uint8_t bitcounter_data =       3;
 
     if(i == 0){
         buffer_p->preamble  = 0;
@@ -94,16 +95,42 @@ void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_bitfiel
     {
         case NRF_DRV_RTC_INT_COMPARE0:
             pin = nrf_gpio_pin_read(rc_button_pin);
-
-            if(i <= PREAMBLE_LENGTH -1){}
-                buffer_p->preamble = buffer_p->preamble | (pin << j)
-                j--;
+            
+            if(i <= PREAMBLE_LENGTH){}  // fill preamble buffer (big-endian)
+                buffer_p->preamble = buffer_p->preamble | (pin << bitcounter_preamble)                
+                bitcounter_preamble--;                
+                break;
             }
-            if(i >= PREAMBLE_LENGTH){
-                buffer_p->control.C0 = pin;
+            if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH)){       // fill control buffer (big-endian)
+                                
+                buffer_p->control |= (pin << bitcounter_control));
+                bitcounter_control--;
                 
+                if(bitcounter_control == 0){
+                    buffer_p.control += 1;     // point to next byte in control buffer
+                    bitcounter_control = 7;
+                }
+                break;            
             }
-            i++;
+            if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH))){           // fill data buffer (big-endian)      
+                buffer_p->data |= (pin << bitcounter_data));
+                bitcounter_data--;
+                
+                if(bitcounter_data == 0){
+                    buffer_p.data += 1;        // point to next byte in data buffer
+                    bitcounter_data = 3;
+                }
+                if(i == (PACKET_LENGTH - 1)){   // prep for next transmission
+                    
+                    bitcounter_preamble =    31; // reset counters
+                    bitcounter_control =     7;
+                    bitcounter_data =        3;
+                    
+                    buffer_p.control -= 10;    // reset pointers to the start of the buffers
+                    buffer_p.data -= 1;
+                }
+               
+            }
             break;
 
         case NRF_DRV_RTC_INT_COMPARE1:
@@ -114,14 +141,44 @@ void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_bitfiel
             //Do nothing.
             break;
     }
+    i++;
+    if(i >= PACKET_LENGTH){
+        i = 0; // prep for next transmission
+        message_received = true;
+    }
+    
 }
-
 
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
 {
-    buffer_sort(int_type, &buffer);
+    rx_to_buffer(int_type, &buffer_4);
+    if(message_received){
+        if(buffer.preamble != RC_BUTTON_PREAMBLE){
+        //Error handling
+        }
+        
+        //TODO convert buffer_bitfields4_t to buffer_bitfields_t
+    }
 }
 
+void bit_extraction(volatile buffer_bitfields4_t * buffer4_p, volatile buffer_bitfields_t * buffer_p){
+    volatile static uint8_t i,j = 0;
+    // fix below
+    for(i = 0;i <= CONTROL_LENGTH; i++){ 
+        
+        if(is_odd(i)){          
+            if(buffer4_p->control.c0 == (DATA_H << 4)){ buffer_p->control = (1 << j); }
+            else{ buffer_p->control = (0 << k); }
+       
+            j++;
+        }
+        else{
+            if(buffer4_p->control.C1 == DATA_H){ buffer_p->control = (1 << j); }
+            else{ buffer_p->control = (0 << k); }
+        }
+    }
+
+}
 
 /** @brief Function initialization and configuration of RTC driver instance.
  */
@@ -148,49 +205,4 @@ void rtc_init(void)
 
     //Power on RTC instance
     nrf_drv_rtc_enable(&RTC_RC_BUTTON);
-}
-
-
-void bitmasks_init(void){                        // creates bitmaks for reading 4 bits (15 = 0b1111)
-
-    for(uint8_t j = 0; j <= 7; j++){             // bitmasks for the control_0 buffer
-        control_msk[j] = (15 << (4 * j));
-    }
-    for(uint8_t j = 0; j <= 7; j++){             // bitmasks for the control_1 buffer
-        control_msk[j+8] = (15 << (4 * j));
-    }
-    for(uint8_t j = 0; j <= 3; j++){
-        control_msk[j+16] = (15 << (4 * j));     // bitmasks for the control_2 buffer
-    }
-    for(uint8_t i = 0; i <= 3;i++){
-        data_msk[0] = (15 << (4 * i));           // bitmasks for the data buffer
-    }
-}
-
-
-void rc_button_handler(bool *message_p)
-{
-    if(buffer.preamble != RC_BUTTON_PREAMBLE){
-        //Error handling
-    }
-
-    for(uint8_t i = 0; i <= 7; i++){
-        (((buffer.control_0 && control_msk[i]) >> (4 * i)) == DATA_H) ? (message_p[i] = 1) : (message_p[i] = 0);            // puts the control bits into the message array
-    }
-    for(uint8_t i = 0; i <= 7; i++){
-        (((buffer.control_1 && control_msk[i+8]) >> (4 * i)) == DATA_H) ? (message_p[8 + i] = 1) : (message_p[i] = 0);
-    }
-    for(uint8_t i = 0; i <= 3; i++){
-        (((buffer.control_2 && control_msk[i+16]) >> (4 * i)) == DATA_H) ? (message_p[16 + i] = 1) : (message_p[i] = 0);
-    }
-
-    for(uint8_t i = 0; i <= 3;i++){
-        ((buffer.data && data_msk[i]) == DATA_H) ? (message_p[20 + i] = 1) : (message_p[20 + i] = 0);                       // puts the data bits into the message array
-    }
-
-    buffer.preamble =   0;  // reset the buffers
-    buffer.control_0 =  0;
-    buffer.control_1 =  0;
-    buffer.control_2 =  0;
-    buffer.data =       0;
 }
