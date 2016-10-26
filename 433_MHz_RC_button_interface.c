@@ -15,8 +15,9 @@
 const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(1); /**< Declaring an instance of nrf_drv_rtc for RTC1. */
 nrf_drv_gpiote_pin_t rc_button_pin =    INPUT_PIN;  // input pin
 
-volatile struct buffer_bitfields4_t buffer_4    = {0};
-volatile struct buffer_bitfields_t buffer       = {0};
+volatile buffer4_t buffer_4 = {0};
+volatile uint32_t buffer    = 0;
+
 volatile bool message_received = false;
 
 uint32_t control_msk[20];                           //bitmasks used to extract control bits C0:C19
@@ -76,19 +77,21 @@ void rc_button_init(void)
     nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
-void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t * buffer_p){
+void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_p){
     
     uint32_t pin =                                  0;
-    uint16_t bitmask =                              0;
     static volatile uint8_t i =                     0;
     static volatile uint8_t bitcounter_preamble =   31;
-    static volatile uint8_t bitcounter_control =    7;
-    static volatile uint8_t bitcounter_data =       3;
+    static volatile uint8_t bitcounter_control =    31;
+    static volatile uint8_t bytecounter_control =   0;
+    static volatile uint8_t bitcounter_data =       15;
 
-    if(i == 0){
-        buffer_p->preamble  = 0;
-        buffer_p->control   = 0;
-        buffer_p->data      = 0;
+    if(i == 0){    //reset the buffers
+        buffer4_p->preamble     = 0;
+        buffer4_p->control.C0   = 0;
+        buffer4_p->control.C1   = 0;
+        buffer4_p->control.C2   = 0;        
+        buffer4_p->data         = 0;
     }
 
     switch (int_type)
@@ -96,40 +99,45 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t 
         case NRF_DRV_RTC_INT_COMPARE0:
             pin = nrf_gpio_pin_read(rc_button_pin);
             
-            if(i <= PREAMBLE_LENGTH){}  // fill preamble buffer (big-endian)
-                buffer_p->preamble = buffer_p->preamble | (pin << bitcounter_preamble)                
+            if(i <= PREAMBLE_LENGTH){  // fill preamble buffer (big-endian)
+                buffer4_p->preamble = buffer4_p->preamble | (pin << bitcounter_preamble);                
                 bitcounter_preamble--;                
                 break;
             }
-            if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH)){       // fill control buffer (big-endian)
-                                
-                buffer_p->control |= (pin << bitcounter_control));
+            if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH))){       // fill control buffer (big-endian)
+                
+                switch(bytecounter_control)
+                {
+                    case 0:
+                        buffer4_p->control.C0 =  (pin << bitcounter_control);
+                        break;
+                    case 1:
+                        buffer4_p->control.C1 =  (pin << bitcounter_control);
+                        break;
+                    case 2:
+                        bitcounter_control -= 16; // C2 is only 16 bit
+                        buffer4_p->control.C2 =  (pin << bitcounter_control);
+                        break;
+                    default:
+                        // ERROR handling
+                        break;
+                }
+                 
+                if(bitcounter_control == 0){
+                    bitcounter_control = 31;
+                    bytecounter_control++;
+                }
                 bitcounter_control--;
                 
-                if(bitcounter_control == 0){
-                    buffer_p.control += 1;     // point to next byte in control buffer
-                    bitcounter_control = 7;
-                }
                 break;            
             }
-            if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH))){           // fill data buffer (big-endian)      
-                buffer_p->data |= (pin << bitcounter_data));
+            if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH)){           // fill data buffer (big-endian)      
+                buffer4_p->data |= (pin << bitcounter_data);
                 bitcounter_data--;
                 
-                if(bitcounter_data == 0){
-                    buffer_p.data += 1;        // point to next byte in data buffer
-                    bitcounter_data = 3;
-                }
-                if(i == (PACKET_LENGTH - 1)){   // prep for next transmission
-                    
-                    bitcounter_preamble =    31; // reset counters
-                    bitcounter_control =     7;
-                    bitcounter_data =        3;
-                    
-                    buffer_p.control -= 10;    // reset pointers to the start of the buffers
-                    buffer_p.data -= 1;
-                }
-               
+                if(bitcounter_data == 0){                    
+                    bitcounter_data = 15;
+                }              
             }
             break;
 
@@ -142,8 +150,16 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer_bitfields4_t 
             break;
     }
     i++;
-    if(i >= PACKET_LENGTH){
-        i = 0; // prep for next transmission
+    if(i >= PACKET_LENGTH){     // prep for next transmission
+        i = 0;          
+        bitcounter_preamble = 31; 
+        bitcounter_control  = 31;
+        bytecounter_control = 0;
+        bitcounter_data     = 3;        
+        
+        nrf_rtc_task_trigger(RTC_RC_BUTTON.p_reg, NRF_RTC_TASK_STOP);
+        nrf_rtc_task_trigger(RTC_RC_BUTTON.p_reg, NRF_RTC_TASK_CLEAR);
+        
         message_received = true;
     }
     
@@ -153,28 +169,51 @@ void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
 {
     rx_to_buffer(int_type, &buffer_4);
     if(message_received){
-        if(buffer.preamble != RC_BUTTON_PREAMBLE){
-        //Error handling
-        }
-        
-        //TODO convert buffer_bitfields4_t to buffer_bitfields_t
+        if(buffer_4.preamble != RC_BUTTON_PREAMBLE){
+        // Error handling
+        }        
+        bit_decode(&buffer_4, &buffer);
+        // send 'buffer' to UART
+        message_received = false;
     }
 }
 
-void bit_extraction(volatile buffer_bitfields4_t * buffer4_p, volatile buffer_bitfields_t * buffer_p){
-    volatile static uint8_t i,j = 0;
-    // fix below
-    for(i = 0;i <= CONTROL_LENGTH; i++){ 
-        
-        if(is_odd(i)){          
-            if(buffer4_p->control.c0 == (DATA_H << 4)){ buffer_p->control = (1 << j); }
-            else{ buffer_p->control = (0 << k); }
-       
-            j++;
+void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
+    uint8_t i   = 0;
+    uint8_t j   = 0;
+    uint32_t placeholder = 0;
+
+    for(i = 0;i <= 7; i++){ // 4 * 8 bits per 32 bit uint.
+        placeholder = buffer4_p->control.C0 >> (28 - (j*4)) & 0xF; // need a placeholder because the if statement evaluates '==' before '&'
+        if(placeholder ==  DATA_H){ 
+            buffer |= (1 << (23 - i));  // i = 0 -> MSB
         }
         else{
-            if(buffer4_p->control.C1 == DATA_H){ buffer_p->control = (1 << j); }
-            else{ buffer_p->control = (0 << k); }
+            buffer |= (0 << (23 - i));
+        }
+        placeholder = buffer4_p->control.C1 >> (28 - (j*4)) & 0xF;
+        if(placeholder ==  DATA_H){ 
+            buffer |= (1 << (15 - i));  // i = 0 -> LSB + 16 bits
+        }
+        else{
+            buffer |= (0 << (15 - i));
+        }
+        if(i <= 3){
+            placeholder = buffer4_p->control.C2 >> (12 - (j*4)) & 0xF; // .control.C2 is only 16bit
+            if(placeholder ==  DATA_H){ 
+                buffer |= (1 << (7 - i));   // i = 0 -> LSB + 8 bits
+            }
+            else{
+                buffer |= (0 << (7 - i));
+            }
+        
+            placeholder = buffer4_p->data >> (12 - (j*4)) & 0xF;        // .data is only 16bit
+            if(placeholder ==  DATA_H){ 
+                buffer |= (1 << (3 - i));   // i = 0 -> LSB + 4 bits
+            }
+            else{
+                buffer |= (0 << (3 - i));
+            }
         }
     }
 

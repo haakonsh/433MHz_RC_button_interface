@@ -20,74 +20,16 @@
 uint8_t is_odd(uint8_t x);
 
 typedef struct {
-    uint8_t C1  :1;
-    uint8_t C2  :1;
-    uint8_t C3  :1;
-    uint8_t C4  :1;
-    uint8_t C5  :1;
-    uint8_t C6  :1;
-    uint8_t C7  :1;
-    uint8_t C8  :1;
-    uint8_t C9  :1;
-    uint8_t C10 :1;
-    uint8_t C11 :1;
-    uint8_t C12 :1;
-    uint8_t C13 :1;
-    uint8_t C14 :1;
-    uint8_t C15 :1;
-    uint8_t C16 :1;
-    uint8_t C17 :1;
-    uint8_t C18 :1;
-    uint8_t C19 :1;
-}control_t;
-
-typedef struct{
-    uint8_t D0 : 1;
-    uint8_t D1 : 1;
-    uint8_t D2 : 1;
-    uint8_t D3 : 1;
-}data_t;
-
-typedef struct {
-    control_t control;
-    data_t data;
-}buffer_bitfields_t;
-
-typedef struct {
-    uint8_t C0  :4;
-    uint8_t C1  :4;
-    uint8_t C2  :4;
-    uint8_t C3  :4;
-    uint8_t C4  :4;
-    uint8_t C5  :4;
-    uint8_t C6  :4;
-    uint8_t C7  :4;
-    uint8_t C8  :4;
-    uint8_t C9  :4;
-    uint8_t C10 :4;
-    uint8_t C11 :4;
-    uint8_t C12 :4;
-    uint8_t C13 :4;
-    uint8_t C14 :4;
-    uint8_t C15 :4;
-    uint8_t C16 :4;
-    uint8_t C17 :4;
-    uint8_t C18 :4;
-    uint8_t C19 :4;
+    uint32_t C0;
+    uint32_t C1;
+    uint16_t C2;
 }control4_t;
-
-typedef struct{
-    uint8_t D0 :4;
-    uint8_t D1 :4;
-    uint8_t D2 :4;
-    uint8_t D3 :4;
-}data4_t;
 
 typedef struct{
     uint32_t preamble;
     control4_t control;
-    data4_t data;
-}buffer_bitfields4_t;
+    uint16_t data;
+}buffer4_t;
 
 // function converts ms to rtc tick units
 uint32_t us_to_ticks_convert(uint32_t);
@@ -96,11 +38,13 @@ uint32_t us_to_ticks_convert(uint32_t);
 void rc_button_init(void);
 
 // function collects the bit stream and places it into their respective buffers
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile buffer_t * buffer_p);
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile uint32_t * buffer_p);
 
 // interrupt handler called by the rtc half-way between each clock sycle.
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type);
 
+// function decodes bits from the 4bit worded buffer and places them in a uint32_t
+void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p);
 
 // function initialization and configuration of RTC driver instance.
 void rtc_init(void);
@@ -112,3 +56,4 @@ void bitmasks_init(void);
 void rc_button_handler(bool * message_p);
 
 static inline uint8_t is_odd(uint8_t x) { return x & 1; }
+

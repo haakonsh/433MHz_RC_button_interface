@@ -46,7 +46,6 @@ int main(void)
     err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
 
-    bitmasks_init();
     rtc_init();
     rc_button_init();
 
