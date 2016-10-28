@@ -57,3 +57,7 @@ void rc_button_handler(bool * message_p);
 
 static inline uint8_t is_odd(uint8_t x) { return x & 1; }
 
+/** @brief Function starting the internal LFCLK XTAL oscillator.
+ */
+void lfclk_config(void);
+

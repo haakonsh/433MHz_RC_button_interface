@@ -45,15 +45,17 @@ int main(void)
 
     err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
+    
+    lfclk_config();
 
     rtc_init();
     rc_button_init();
 
     while (1)
     {
-        __WFE();    //replace with the soft_device sleep function.
-        __SEV();
-        __WFE();
+        //__WFE();    //replace with the soft_device sleep function.
+        //__SEV();
+        //__WFE();
     }
 }
 

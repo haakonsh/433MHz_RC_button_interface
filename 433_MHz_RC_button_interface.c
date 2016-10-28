@@ -11,6 +11,7 @@
 #include "433_MHz_RC_button_interface.h"
 #include "nrf_gpiote.h"
 #include "app_error.h"
+#include "nrf_drv_clock.h"
 
 const nrf_drv_rtc_t RTC_RC_BUTTON =     NRF_DRV_RTC_INSTANCE(1); /**< Declaring an instance of nrf_drv_rtc for RTC1. */
 nrf_drv_gpiote_pin_t rc_button_pin =    INPUT_PIN;  // input pin
@@ -24,6 +25,8 @@ uint32_t control_msk[20];                           //bitmasks used to extract c
 uint32_t data_msk[4];                               //bitmasks used to extract data bits D0:D3
 
 volatile bool transfer_done =           false;      // check to signal that the transfer buffers are filled
+
+nrf_ppi_channel_t ppi_channel_1, ppi_channel_2;
 
 uint32_t us_to_ticks_convert(uint32_t time_us)
 {
@@ -42,11 +45,11 @@ void rc_button_init(void)
     ret_code_t err_code;
     uint32_t rtc_task_addr, rtc_evt_addr;
     uint32_t gpiote_evt_addr;
-    nrf_ppi_channel_t ppi_channel_1, ppi_channel_2;
+    
 
     nrf_drv_gpiote_in_config_t rc_button_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
     rc_button_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
-
+    
     err_code = nrf_drv_gpiote_in_init(rc_button_pin, &rc_button_pin_cfg, NULL);
     APP_ERROR_CHECK(err_code);
 
@@ -73,8 +76,9 @@ void rc_button_init(void)
 
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
     APP_ERROR_CHECK(err_code);
+    
+    nrf_drv_gpiote_in_event_enable(rc_button_pin, false);    
 
-    nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 }
 
 void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_p){
@@ -219,6 +223,16 @@ void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
 
 }
 
+/** @brief Function starting the internal LFCLK XTAL oscillator.
+ */
+void lfclk_config(void)
+{
+    ret_code_t err_code = nrf_drv_clock_init();
+    APP_ERROR_CHECK(err_code);
+
+    nrf_drv_clock_lfclk_request(NULL);
+}
+
 /** @brief Function initialization and configuration of RTC driver instance.
  */
 void rtc_init(void)
@@ -232,6 +246,7 @@ void rtc_init(void)
 
     //Enable tick event & interrupt
     nrf_drv_rtc_tick_enable(&RTC_RC_BUTTON, true);
+    nrf_drv_rtc_tick_disable(&RTC_RC_BUTTON);
 
     // Set compare channel to trigger interrupts
     rtc_ticks = us_to_ticks_convert(bit_sample_offset);
@@ -243,5 +258,5 @@ void rtc_init(void)
     APP_ERROR_CHECK(err_code);
 
     //Power on RTC instance
-    nrf_drv_rtc_enable(&RTC_RC_BUTTON);
+    //nrf_drv_rtc_enable(&RTC_RC_BUTTON);
 }
