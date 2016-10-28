@@ -10,46 +10,26 @@
 
 #define RC_BUTTON_PREAMBLE              0x80000000  //from EV1527 OTP Encoder protocol spec
 #define PREAMBLE_LENGTH                 32          //from EV1527 OTP Encoder protocol spec
-#define CONTROL_LENGTH_0                32          //lowest control buffer length
-#define CONTROL_LENGTH_1                32          //middle control buffer length
-#define CONTROL_LENGTH_2                16          //highest control buffer length
 #define CONTROL_LENGTH                  80          //from EV1527 OTP Encoder protocol spec
 #define DATA_LENGTH                     16          //from EV1527 OTP Encoder protocol spec
+#define PACKET_LENGTH                   (PREAMBLE_LENGTH + CONTROL_LENGTH + DATA_LENGTH)
 
+#define DATA_H                          0xE        //from EV1527 OTP Encoder protocol spec
+#define DATA_L                          0x8        //from EV1527 OTP Encoder protocol spec
 
-#define C0                              0           // bit index in the boolean array
-#define C1                              1
-#define C2                              2
-#define C3                              3
-#define C4                              4
-#define C5                              5
-#define C6                              6
-#define C7                              7
-#define C8                              8
-#define C9                              9
-#define C10                             10
-#define C11                             11
-#define C12                             12
-#define C13                             13
-#define C14                             14
-#define C15                             15
-#define C16                             16
-#define C17                             17
-#define C18                             18
-#define C19                             19
-#define D0                              20
-#define D1                              21
-#define D2                              22
-#define D3                              23
+uint8_t is_odd(uint8_t x);
 
-//this buffer stores the decoded information in boolean arrays
-struct buffer_t{
+typedef struct {
+    uint32_t C0;
+    uint32_t C1;
+    uint16_t C2;
+}control4_t;
+
+typedef struct{
     uint32_t preamble;
-    uint32_t control_0;          // control bits 0:7
-    uint32_t control_1;          // control bits 8:15
-    uint16_t control_2;          // control bits 16:19
-    uint16_t data;               // data bits 0:3
- };
+    control4_t control;
+    uint16_t data;
+}buffer4_t;
 
 // function converts ms to rtc tick units
 uint32_t us_to_ticks_convert(uint32_t);
@@ -58,11 +38,13 @@ uint32_t us_to_ticks_convert(uint32_t);
 void rc_button_init(void);
 
 // function collects the bit stream and places it into their respective buffers
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile struct buffer_t * buffer_p);
+void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile uint32_t * buffer_p);
 
 // interrupt handler called by the rtc half-way between each clock sycle.
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type);
 
+// function decodes bits from the 4bit worded buffer and places them in a uint32_t
+void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p);
 
 // function initialization and configuration of RTC driver instance.
 void rtc_init(void);
@@ -72,3 +54,10 @@ void bitmasks_init(void);
 
 // function that extracts individual bits from their respective buffer and places them into a boolean array of bits
 void rc_button_handler(bool * message_p);
+
+static inline uint8_t is_odd(uint8_t x) { return x & 1; }
+
+/** @brief Function starting the internal LFCLK XTAL oscillator.
+ */
+void lfclk_config(void);
+
