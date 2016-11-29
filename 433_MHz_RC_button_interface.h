@@ -5,7 +5,7 @@
 #include "nrf_drv_gpiote.h"
 
 #define CLK                             1480        //us
-#define bit_sample_offset               (CLK/2)      //us
+#define bit_sample_offset               (CLK/2)     //us
 #define INPUT_PIN                       29
 
 #define RC_BUTTON_PREAMBLE              0x80000000  //from EV1527 OTP Encoder protocol spec
@@ -60,4 +60,3 @@ static inline uint8_t is_odd(uint8_t x) { return x & 1; }
 /** @brief Function starting the internal LFCLK XTAL oscillator.
  */
 void lfclk_config(void);
-

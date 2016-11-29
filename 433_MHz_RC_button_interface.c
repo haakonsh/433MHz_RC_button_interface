@@ -45,11 +45,11 @@ void rc_button_init(void)
     ret_code_t err_code;
     uint32_t rtc_task_addr, rtc_evt_addr;
     uint32_t gpiote_evt_addr;
-    
+
 
     nrf_drv_gpiote_in_config_t rc_button_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
     rc_button_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
-    
+
     err_code = nrf_drv_gpiote_in_init(rc_button_pin, &rc_button_pin_cfg, NULL);
     APP_ERROR_CHECK(err_code);
 
@@ -76,13 +76,13 @@ void rc_button_init(void)
 
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
     APP_ERROR_CHECK(err_code);
-    
-    nrf_drv_gpiote_in_event_enable(rc_button_pin, false);    
+
+    nrf_drv_gpiote_in_event_enable(rc_button_pin, false);
 
 }
 
 void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_p){
-    
+
     uint32_t pin =                                  0;
     static volatile uint8_t i =                     0;
     static volatile uint8_t bitcounter_preamble =   31;
@@ -94,7 +94,7 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
         buffer4_p->preamble     = 0;
         buffer4_p->control.C0   = 0;
         buffer4_p->control.C1   = 0;
-        buffer4_p->control.C2   = 0;        
+        buffer4_p->control.C2   = 0;
         buffer4_p->data         = 0;
     }
 
@@ -102,14 +102,14 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
     {
         case NRF_DRV_RTC_INT_COMPARE0:
             pin = nrf_gpio_pin_read(rc_button_pin);
-            
+
             if(i <= PREAMBLE_LENGTH){  // fill preamble buffer (big-endian)
-                buffer4_p->preamble = buffer4_p->preamble | (pin << bitcounter_preamble);                
-                bitcounter_preamble--;                
+                buffer4_p->preamble = buffer4_p->preamble | (pin << bitcounter_preamble);
+                bitcounter_preamble--;
                 break;
             }
             if(((i - 1) >= PREAMBLE_LENGTH) && (i <= (PREAMBLE_LENGTH + CONTROL_LENGTH))){       // fill control buffer (big-endian)
-                
+
                 switch(bytecounter_control)
                 {
                     case 0:
@@ -126,22 +126,22 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
                         // ERROR handling
                         break;
                 }
-                 
+
                 if(bitcounter_control == 0){
                     bitcounter_control = 31;
                     bytecounter_control++;
                 }
                 bitcounter_control--;
-                
-                break;            
+
+                break;
             }
-            if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH)){           // fill data buffer (big-endian)      
+            if(i >= (PREAMBLE_LENGTH + CONTROL_LENGTH)){           // fill data buffer (big-endian)
                 buffer4_p->data |= (pin << bitcounter_data);
                 bitcounter_data--;
-                
-                if(bitcounter_data == 0){                    
+
+                if(bitcounter_data == 0){
                     bitcounter_data = 15;
-                }              
+                }
             }
             break;
 
@@ -155,18 +155,18 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
     }
     i++;
     if(i >= PACKET_LENGTH){     // prep for next transmission
-        i = 0;          
-        bitcounter_preamble = 31; 
-        bitcounter_control  = 31;
+        i = 0;
+        bitcounter_preamble = 31;
+        bitcounter_control  = 20;
         bytecounter_control = 0;
-        bitcounter_data     = 3;        
-        
+        bitcounter_data     = 3;
+
         nrf_rtc_task_trigger(RTC_RC_BUTTON.p_reg, NRF_RTC_TASK_STOP);
         nrf_rtc_task_trigger(RTC_RC_BUTTON.p_reg, NRF_RTC_TASK_CLEAR);
-        
+
         message_received = true;
     }
-    
+
 }
 
 void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
@@ -175,7 +175,7 @@ void rtc_rc_button_int_handler(nrf_drv_rtc_int_type_t int_type)
     if(message_received){
         if(buffer_4.preamble != RC_BUTTON_PREAMBLE){
         // Error handling
-        }        
+        }
         bit_decode(&buffer_4, &buffer);
         // send 'buffer' to UART
         message_received = false;
@@ -189,14 +189,14 @@ void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
 
     for(i = 0;i <= 7; i++){ // 4 * 8 bits per 32 bit uint.
         placeholder = buffer4_p->control.C0 >> (28 - (j*4)) & 0xF; // need a placeholder because the if statement evaluates '==' before '&'
-        if(placeholder ==  DATA_H){ 
+        if(placeholder ==  DATA_H){
             buffer |= (1 << (23 - i));  // i = 0 -> MSB
         }
         else{
             buffer |= (0 << (23 - i));
         }
         placeholder = buffer4_p->control.C1 >> (28 - (j*4)) & 0xF;
-        if(placeholder ==  DATA_H){ 
+        if(placeholder ==  DATA_H){
             buffer |= (1 << (15 - i));  // i = 0 -> LSB + 16 bits
         }
         else{
@@ -204,15 +204,15 @@ void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
         }
         if(i <= 3){
             placeholder = buffer4_p->control.C2 >> (12 - (j*4)) & 0xF; // .control.C2 is only 16bit
-            if(placeholder ==  DATA_H){ 
+            if(placeholder ==  DATA_H){
                 buffer |= (1 << (7 - i));   // i = 0 -> LSB + 8 bits
             }
             else{
                 buffer |= (0 << (7 - i));
             }
-        
+
             placeholder = buffer4_p->data >> (12 - (j*4)) & 0xF;        // .data is only 16bit
-            if(placeholder ==  DATA_H){ 
+            if(placeholder ==  DATA_H){
                 buffer |= (1 << (3 - i));   // i = 0 -> LSB + 4 bits
             }
             else{
