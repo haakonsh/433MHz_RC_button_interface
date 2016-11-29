@@ -33,6 +33,16 @@
 #include "nrf_drv_gpiote.h"
 #include "433_MHz_RC_button_interface.h"
 
+// // TODO: 1. Detect the preamble accurately, and signal the user.
+//
+// // TODO: 2. Port the RTC + pin sampler to TIMER + pin sampler.
+//
+// // TODO: 3. Merge 1. and 2.
+//
+// // TODO: 4. Read DATA bits and turn on DK LED's.
+//
+// // TODO: 5. Celebrate.
+
 /**
  * @brief Function for main application entry.
  */
@@ -40,16 +50,8 @@ int main(void)
 {
     uint32_t err_code = NRF_SUCCESS;
 
-    err_code = nrf_drv_ppi_init();
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_gpiote_init();
-    APP_ERROR_CHECK(err_code);
+    timer_init();
     
-    lfclk_config();
-
-    rtc_init();
-    rc_button_init();
 
     while (1)
     {
