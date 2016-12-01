@@ -1,18 +1,15 @@
 #include <stdint.h>
 #include <stdbool.h>
-#include "nrf_drv_rtc.h"
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
-#include "nrf_drv_timer.h"
 
-
-#define CLK                             1424        //us
-#define TIMER_TICKS                     (CLK/8)     //us
+#define CLK                             1480        //us
 #define INPUT_PIN                       4
-#define OUTPUT_PIN                      29
+#define OUTPUT_PIN                      17
 
-// interrupt handler called by the rtc half-way between each clock sycle.
-void timer_rc_button_evt_handler(nrf_timer_event_t event_type, void* p_context);
+#define CONTROL_LENGTH                  80          //from EV1527 OTP Encoder protocol spec
+#define DATA_LENGTH                     16          //from EV1527 OTP Encoder protocol spec
+#define PACKET_LENGTH                   (CONTROL_LENGTH + DATA_LENGTH)
 
-// function initialization and configuration of RTC driver instance.
-void timer_init(void);
+#define DATA_H                          0xE        //from EV1527 OTP Encoder protocol spec
+#define DATA_L                          0x8        //from EV1527 OTP Encoder protocol spec
