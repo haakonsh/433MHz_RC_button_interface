@@ -33,29 +33,94 @@
 #include "nrf_drv_gpiote.h"
 #include "433_MHz_RC_button_interface.h"
 
+nrf_drv_gpiote_pin_t input_pin =    INPUT_PIN;  // input pin
+
+nrf_ppi_channel_t ppi_channel_1, ppi_channel_2;
+
+void gpiote_init(void)
+{
+    err_code = nrf_drv_gpiote_init();
+    APP_ERROR_CHECK(err_code);
+
+    nrf_drv_gpiote_in_config_t input_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
+    input_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
+
+    err_code = nrf_drv_gpiote_in_init(input_pin, &input_pin_cfg, NULL);
+    APP_ERROR_CHECK(err_code);
+}
+
+/** @brief Function initialization and configuration of timer driver instance.
+*/
+void timer_init(void)
+{
+    uint32_t err_code;
+
+    //Initialize timer instance
+
+
+    //Enable event & interrupt
+
+
+    // Set compare channel to trigger interrupts
+
+
+    //Power on TIMER instance
+
+}
+
+void ppi_init(void)
+{
+    ret_code_t err_code;
+    uint32_t timer_task_addr, timer_evt_addr;
+    uint32_t gpiote_evt_addr;
+
+    err_code = nrf_drv_ppi_init();
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_1);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_2);
+    APP_ERROR_CHECK(err_code);
+
+    timer_task_addr = nrf_drv_timer_task_address_get(&TIMER, NRF_TIMER_TASK_START);
+    gpiote_evt_addr = nrf_drv_gpiote_in_event_addr_get(input_pin);
+
+    // starts the timer when input_pin goes hi.
+    err_code = nrf_drv_ppi_channel_assign(ppi_channel_1, gpiote_evt_addr, timer_task_addr);
+    APP_ERROR_CHECK(err_code);
+
+    timer_task_addr = nrf_drv_timer_task_address_get(&TIMER, NRF_TIMER_TASK_CLEAR);
+    timer_evt_addr = nrf_drv_timer_event_address_get(&TIMER, NRF_TIMER_EVENT_COMPARE_1);
+
+    // clears the timer after a data clock cycle
+    err_code = nrf_drv_ppi_channel_assign(ppi_channel_2, timer_evt_addr, timer_task_addr);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
+    APP_ERROR_CHECK(err_code);
+
+    nrf_drv_gpiote_in_event_enable(input_pin, false);
+
+}
+
 /**
  * @brief Function for main application entry.
  */
 int main(void)
 {
-    uint32_t err_code = NRF_SUCCESS;
-
-    err_code = nrf_drv_ppi_init();
-    APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_gpiote_init();
-    APP_ERROR_CHECK(err_code);
-    
-    lfclk_config();
-
-    rtc_init();
-    rc_button_init();
+    gpiote_init();
+    ppi_init();
 
     while (1)
     {
         //__WFE();    //replace with the soft_device sleep function.
         //__SEV();
         //__WFE();
+
     }
 }
 
