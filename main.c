@@ -48,10 +48,12 @@
  */
 int main(void)
 {
-    uint32_t err_code = NRF_SUCCESS;
+//    uint32_t err_code = NRF_SUCCESS;
+
+    nrf_gpio_cfg_input(INPUT_PIN, NRF_GPIO_PIN_PULLDOWN);
+    nrf_gpio_cfg_output(OUTPUT_PIN);
 
     timer_init();
-    
 
     while (1)
     {
