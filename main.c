@@ -55,17 +55,26 @@ void timer_init(void)
 {
     uint32_t err_code;
 
-    //Initialize timer instance
+    nrf_drv_timer_config_t timer_cfg = {
+        .frequency          = NRF_TIMER_FREQ_1MHz,
+        .mode               = (nrf_timer_mode_t)TIMER_DEFAULT_CONFIG_MODE,
+        .bit_width          = NRF_TIMER_BIT_WIDTH_16,
+        .interrupt_priority = TIMER_DEFAULT_CONFIG_IRQ_PRIORITY,
+        .p_context          = NULL
+    };
 
-
-    //Enable event & interrupt
-
+    //Initialize TIMER instance
+    err_code = nrf_drv_timer_init(&TIMER, &timer_cfg, timer_rc_button_evt_handler);
+    APP_ERROR_CHECK(err_code);
 
     // Set compare channel to trigger interrupts
+    nrf_drv_timer_compare(&TIMER, NRF_TIMER_CC_CHANNEL0, TIMER_TICKS, true);
 
+    nrf_drv_timer_extended_compare(
+        &TIMER, NRF_TIMER_CC_CHANNEL1, (TIMER_TICKS * 2), NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
 
-    //Power on TIMER instance
-
+    //enable timer instance
+    nrf_drv_timer_enable(&TIMER);
 }
 
 void ppi_init(void)
@@ -114,6 +123,7 @@ int main(void)
 {
     gpiote_init();
     ppi_init();
+    timer_init();
 
     while (1)
     {
