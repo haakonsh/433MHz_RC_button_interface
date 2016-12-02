@@ -2,10 +2,9 @@
 #include <stdbool.h>
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
+#include "nrf_drv_timer.h"
 
-#define CLK                             1480        //us
-#define bit_sample_offset               (CLK/2)      //us
-#define INPUT_PIN                       29
+
 
 #define CONTROL_LENGTH                  80          //from EV1527 OTP Encoder protocol spec
 #define DATA_LENGTH                     16          //from EV1527 OTP Encoder protocol spec
@@ -25,14 +24,13 @@ typedef struct{
     uint16_t data;
 }buffer4_t;
 
+extern volatile buffer4_t buffer_4;
+extern volatile uint32_t buffer;
+extern volatile bool message_received;
+
 // funcion samples the datastream and places the bits in a buffer
-void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_p);
+void rx_to_buffer(nrf_timer_event_t evt_type, volatile buffer4_t * buffer4_p);
 
-// function collects the bit stream and places it into their respective buffers
-void buffer_sort(nrf_drv_rtc_int_type_t int_type, volatile uint32_t * buffer_p);
-
-// interrupt handler called by the rtc half-way between each clock sycle.
-void TIMER_int_handler(nrf_drv_rtc_int_type_t int_type);
 
 // function decodes bits from the 4bit worded buffer and places them in a uint32_t
 void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p);

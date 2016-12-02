@@ -11,6 +11,8 @@
 #include "nrf_gpiote.h"
 #include "app_error.h"
 #include "nrf_drv_clock.h"
+#include "nrf_drv_timer.h"
+#include "main.h"
 
 volatile buffer4_t buffer_4 =       {0};
 volatile uint32_t buffer    =       0;
@@ -22,7 +24,7 @@ uint32_t data_msk[4];                               //bitmasks used to extract d
 
 volatile bool transfer_done =       false;      // check to signal that the transfer buffers are filled
 
-void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_p){
+void rx_to_buffer(nrf_timer_event_t evt_type, volatile buffer4_t * buffer4_p){
 
     uint32_t pin =                                  0;
     static volatile uint8_t i =                     0;
@@ -38,9 +40,9 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
         buffer4_p->data         = 0;
     }
 
-    switch (int_type)
+    switch (evt_type)
     {
-        case NRF_DRV_RTC_INT_COMPARE0:
+        case NRF_TIMER_EVENT_COMPARE0:
             pin = nrf_gpio_pin_read(input_pin);
 
             if(i <=  CONTROL_LENGTH){       // fill control buffer (big-endian)
@@ -80,7 +82,7 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
             }
             break;
 
-        case NRF_DRV_RTC_INT_COMPARE1:
+        case NRF_TIMER_EVENT_COMPARE1:
             // TODO what happends here?
             break;
 
@@ -91,28 +93,20 @@ void rx_to_buffer(nrf_drv_rtc_int_type_t int_type, volatile buffer4_t * buffer4_
     i++;
     if(i >= PACKET_LENGTH){     // prep for next transmission
         i = 0;
-        bitcounter_preamble = 31;
+  
         bitcounter_control  = 31;
         bytecounter_control = 0;
         bitcounter_data     = 3;
 
-        nrf_rtc_task_trigger(TIMER.p_reg, NRF_RTC_TASK_STOP);
-        nrf_rtc_task_trigger(TIMER.p_reg, NRF_TIMER_TASK_CLEAR);
+        nrf_drv_timer_pause(&TIMER2);
+        nrf_drv_timer_clear(&TIMER2);
 
         message_received = true;
     }
 
 }
 
-void TIMER_int_handler(nrf_drv_rtc_int_type_t int_type)
-{
-    rx_to_buffer(int_type, &buffer_4);
-    if(message_received){
-        bit_decode(&buffer_4, &buffer);
-        // send 'buffer' to UART
-        message_received = false;
-    }
-}
+
 
 void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
     uint8_t i   = 0;

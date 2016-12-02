@@ -32,13 +32,19 @@
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
 #include "433_MHz_RC_button_interface.h"
+#include "nrf_drv_timer.h"
+#include "main.h"
 
 nrf_drv_gpiote_pin_t input_pin =    INPUT_PIN;  // input pin
 
-nrf_ppi_channel_t ppi_channel_1, ppi_channel_2;
+const nrf_drv_timer_t TIMER2 = NRF_DRV_TIMER_INSTANCE(1);
+
+nrf_ppi_channel_t ppi_channel_1;
 
 void gpiote_init(void)
 {
+    uint32_t err_code;
+    
     err_code = nrf_drv_gpiote_init();
     APP_ERROR_CHECK(err_code);
 
@@ -51,10 +57,10 @@ void gpiote_init(void)
 
 /** @brief Function initialization and configuration of timer driver instance.
 */
-void timer_init(void)
+void timers_init(void)
 {
     uint32_t err_code;
-
+     
     nrf_drv_timer_config_t timer_cfg = {
         .frequency          = NRF_TIMER_FREQ_1MHz,
         .mode               = (nrf_timer_mode_t)TIMER_DEFAULT_CONFIG_MODE,
@@ -62,25 +68,35 @@ void timer_init(void)
         .interrupt_priority = TIMER_DEFAULT_CONFIG_IRQ_PRIORITY,
         .p_context          = NULL
     };
-
+    
     //Initialize TIMER instance
-    err_code = nrf_drv_timer_init(&TIMER, &timer_cfg, timer_rc_button_evt_handler);
+    err_code = nrf_drv_timer_init(&TIMER2, &timer_cfg, timer2_evt_handler);
     APP_ERROR_CHECK(err_code);
 
     // Set compare channel to trigger interrupts
-    nrf_drv_timer_compare(&TIMER, NRF_TIMER_CC_CHANNEL0, TIMER_TICKS, true);
+    nrf_drv_timer_compare(&TIMER2, NRF_TIMER_CC_CHANNEL0, CLK/8, true);
 
     nrf_drv_timer_extended_compare(
-        &TIMER, NRF_TIMER_CC_CHANNEL1, (TIMER_TICKS * 2), NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
+        &TIMER2, NRF_TIMER_CC_CHANNEL1, (CLK/8) * 2, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
 
     //enable timer instance
-    nrf_drv_timer_enable(&TIMER);
+    nrf_drv_timer_enable(&TIMER2);
+}
+
+void timer2_evt_handler(nrf_timer_event_t evt_type, void* p_context)
+{
+    rx_to_buffer(evt_type, &buffer_4);
+    if(message_received){
+        bit_decode(&buffer_4, &buffer);
+        // send 'buffer' to UART
+        message_received = false;
+    }
 }
 
 void ppi_init(void)
 {
     ret_code_t err_code;
-    uint32_t timer_task_addr, timer_evt_addr;
+    uint32_t timer_task_addr;
     uint32_t gpiote_evt_addr;
 
     err_code = nrf_drv_ppi_init();
@@ -89,29 +105,16 @@ void ppi_init(void)
     err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_1);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_drv_ppi_channel_alloc(&ppi_channel_2);
-    APP_ERROR_CHECK(err_code);
-
-    timer_task_addr = nrf_drv_timer_task_address_get(&TIMER, NRF_TIMER_TASK_START);
+    timer_task_addr = nrf_drv_timer_task_address_get(&TIMER2, NRF_TIMER_TASK_START);
     gpiote_evt_addr = nrf_drv_gpiote_in_event_addr_get(input_pin);
 
     // starts the timer when input_pin goes hi.
     err_code = nrf_drv_ppi_channel_assign(ppi_channel_1, gpiote_evt_addr, timer_task_addr);
     APP_ERROR_CHECK(err_code);
 
-    timer_task_addr = nrf_drv_timer_task_address_get(&TIMER, NRF_TIMER_TASK_CLEAR);
-    timer_evt_addr = nrf_drv_timer_event_address_get(&TIMER, NRF_TIMER_EVENT_COMPARE_1);
-
-    // clears the timer after a data clock cycle
-    err_code = nrf_drv_ppi_channel_assign(ppi_channel_2, timer_evt_addr, timer_task_addr);
-    APP_ERROR_CHECK(err_code);
-
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
     APP_ERROR_CHECK(err_code);
-
-    err_code = nrf_drv_ppi_channel_enable(ppi_channel_2);
-    APP_ERROR_CHECK(err_code);
-
+  
     nrf_drv_gpiote_in_event_enable(input_pin, false);
 
 }
@@ -123,7 +126,7 @@ int main(void)
 {
     gpiote_init();
     ppi_init();
-    timer_init();
+    timers_init();
 
     while (1)
     {
