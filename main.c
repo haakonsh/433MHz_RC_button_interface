@@ -98,9 +98,10 @@ void timer1_evt_handler(nrf_timer_event_t event_type, void* p_context)
     if(count == 20){
         count = 0;
         if(!value){
-            //YEAH! We dids it, whoop!
-            nrf_gpio_pin_toggle(OUTPUT_PIN);
-            // enable GPIOTE in evt.
+                        
+            //nrf_gpio_pin_toggle(OUTPUT_PIN);
+            nrf_drv_gpiote_in_event_enable(input_pin, false);
+            nrf_drv_timer_pause(&TIMER1);
         }
         value = 0;
     }
@@ -113,6 +114,7 @@ void timer2_evt_handler(nrf_timer_event_t evt_type, void* p_context)
     if(message_received){
         bit_decode(&buffer_4, &buffer);
         // send 'buffer' to UART
+        nrf_drv_timer_resume(&TIMER1);
         message_received = false;
     }
 }
@@ -152,8 +154,6 @@ void ppi_init(void)
 
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
     APP_ERROR_CHECK(err_code);
-
-    nrf_drv_gpiote_in_event_enable(input_pin, false);
 
 }
 

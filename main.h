@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #include "nrf_drv_timer.h"
 #include "nrf_drv_gpiote.h"
 

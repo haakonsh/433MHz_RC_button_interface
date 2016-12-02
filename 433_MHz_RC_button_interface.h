@@ -33,5 +33,4 @@ void rx_to_buffer(nrf_timer_event_t evt_type, volatile buffer4_t * buffer4_p);
 
 // function decodes bits from the 4bit worded buffer and places them in a uint32_t
 void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p);
-=======
->>>>>>> preamble_sense
+
