@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "nrf.h"
+#include "nrf_gpio.h"
 #include "nrf_ppi.h"
 #include "nrf_drv_ppi.h"
 #include "nrf_drv_gpiote.h"
@@ -93,7 +94,7 @@ void rx_to_buffer(nrf_timer_event_t evt_type, volatile buffer4_t * buffer4_p){
     i++;
     if(i >= PACKET_LENGTH){     // prep for next transmission
         i = 0;
-  
+
         bitcounter_control  = 31;
         bytecounter_control = 0;
         bitcounter_data     = 3;
@@ -105,8 +106,6 @@ void rx_to_buffer(nrf_timer_event_t evt_type, volatile buffer4_t * buffer4_p){
     }
 
 }
-
-
 
 void bit_decode(volatile buffer4_t * buffer4_p, volatile uint32_t * buffer_p){
     uint8_t i   = 0;

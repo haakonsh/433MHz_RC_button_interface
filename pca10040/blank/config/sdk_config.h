@@ -1754,8 +1754,13 @@
 
 // <e> APP_TIMER_ENABLED - app_timer - Application timer functionality
 //==========================================================
+<<<<<<< HEAD
 #ifndef APP_TIMER_ENABLED
 #define APP_TIMER_ENABLED 0
+=======
+#ifndef GPIOTE_ENABLED
+#define GPIOTE_ENABLED 0
+>>>>>>> preamble_sense
 #endif
 #if  APP_TIMER_ENABLED
 // <q> APP_TIMER_WITH_PROFILER  - Enable app_timer profiling
@@ -1781,14 +1786,24 @@
 // <q> APP_TWI_ENABLED  - app_twi - TWI transaction manager
 
 
+<<<<<<< HEAD
 #ifndef APP_TWI_ENABLED
 #define APP_TWI_ENABLED 0
+=======
+#ifndef PPI_ENABLED
+#define PPI_ENABLED 0
+>>>>>>> preamble_sense
 #endif
 
 // <e> APP_UART_ENABLED - app_uart - UART driver
 //==========================================================
+<<<<<<< HEAD
 #ifndef APP_UART_ENABLED
 #define APP_UART_ENABLED 0
+=======
+#ifndef RTC_ENABLED
+#define RTC_ENABLED 0
+>>>>>>> preamble_sense
 #endif
 #if  APP_UART_ENABLED
 // <o> APP_UART_DRIVER_INSTANCE  - UART instance used

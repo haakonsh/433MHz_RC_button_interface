@@ -35,32 +35,29 @@
 #include "nrf_drv_timer.h"
 #include "main.h"
 
-nrf_drv_gpiote_pin_t input_pin =    INPUT_PIN;  // input pin
+// // TODO: 1. Detect the preamble accurately, and signal the user.
+//
+// // TODO: 2. Port the RTC + pin sampler to TIMER + pin sampler.
+//
+// // TODO: 3. Merge 1. and 2.
+//
+// // TODO: 4. Read DATA bits and turn on DK LED's.
+//
+// // TODO: 5. Celebrate.
 
+const nrf_drv_timer_t TIMER1 = NRF_DRV_TIMER_INSTANCE(0);
 const nrf_drv_timer_t TIMER2 = NRF_DRV_TIMER_INSTANCE(1);
+
+nrf_drv_gpiote_pin_t input_pin =    INPUT_PIN;  // input pin
 
 nrf_ppi_channel_t ppi_channel_1;
 
-void gpiote_init(void)
-{
-    uint32_t err_code;
-    
-    err_code = nrf_drv_gpiote_init();
-    APP_ERROR_CHECK(err_code);
-
-    nrf_drv_gpiote_in_config_t input_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
-    input_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
-
-    err_code = nrf_drv_gpiote_in_init(input_pin, &input_pin_cfg, NULL);
-    APP_ERROR_CHECK(err_code);
-}
-
-/** @brief Function initialization and configuration of timer driver instance.
-*/
+/** @brief Function initialization and configuration of RTC driver instance.
+ */
 void timers_init(void)
 {
     uint32_t err_code;
-     
+
     nrf_drv_timer_config_t timer_cfg = {
         .frequency          = NRF_TIMER_FREQ_1MHz,
         .mode               = (nrf_timer_mode_t)TIMER_DEFAULT_CONFIG_MODE,
@@ -68,19 +65,46 @@ void timers_init(void)
         .interrupt_priority = TIMER_DEFAULT_CONFIG_IRQ_PRIORITY,
         .p_context          = NULL
     };
-    
-    //Initialize TIMER instance
+
+    //Initialize TIMER instances
+    err_code = nrf_drv_timer_init(&TIMER1, &timer_cfg, timer1_evt_handler);
+    APP_ERROR_CHECK(err_code);
     err_code = nrf_drv_timer_init(&TIMER2, &timer_cfg, timer2_evt_handler);
     APP_ERROR_CHECK(err_code);
 
     // Set compare channel to trigger interrupts
+    nrf_drv_timer_compare(&TIMER1, NRF_TIMER_CC_CHANNEL0, CLK/8, true);
     nrf_drv_timer_compare(&TIMER2, NRF_TIMER_CC_CHANNEL0, CLK/8, true);
 
     nrf_drv_timer_extended_compare(
+        &TIMER1, NRF_TIMER_CC_CHANNEL1, (CLK/8) * 2, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
+    nrf_drv_timer_extended_compare(
         &TIMER2, NRF_TIMER_CC_CHANNEL1, (CLK/8) * 2, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
 
-    //enable timer instance
+    //enable timer instances
+    nrf_drv_timer_enable(&TIMER1);
     nrf_drv_timer_enable(&TIMER2);
+
+}
+
+void timer1_evt_handler(nrf_timer_event_t event_type, void* p_context)
+{
+    static uint8_t count, value;
+
+    if(nrf_gpio_pin_read(INPUT_PIN)){value++;}
+
+    count++;
+
+    if(count == 20){
+        count = 0;
+        if(!value){
+            //YEAH! We dids it, whoop!
+            nrf_gpio_pin_toggle(OUTPUT_PIN);
+            // enable GPIOTE in evt.
+        }
+        value = 0;
+    }
+
 }
 
 void timer2_evt_handler(nrf_timer_event_t evt_type, void* p_context)
@@ -91,6 +115,20 @@ void timer2_evt_handler(nrf_timer_event_t evt_type, void* p_context)
         // send 'buffer' to UART
         message_received = false;
     }
+}
+
+void gpiote_init(void)
+{
+    uint32_t err_code;
+
+    err_code = nrf_drv_gpiote_init();
+    APP_ERROR_CHECK(err_code);
+
+    nrf_drv_gpiote_in_config_t input_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
+    input_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
+
+    err_code = nrf_drv_gpiote_in_init(input_pin, &input_pin_cfg, NULL);
+    APP_ERROR_CHECK(err_code);
 }
 
 void ppi_init(void)
@@ -114,7 +152,7 @@ void ppi_init(void)
 
     err_code = nrf_drv_ppi_channel_enable(ppi_channel_1);
     APP_ERROR_CHECK(err_code);
-  
+
     nrf_drv_gpiote_in_event_enable(input_pin, false);
 
 }
@@ -124,9 +162,12 @@ void ppi_init(void)
  */
 int main(void)
 {
+    nrf_gpio_cfg_input(INPUT_PIN, NRF_GPIO_PIN_PULLDOWN);
+    nrf_gpio_cfg_output(OUTPUT_PIN);
+
+    timers_init();
     gpiote_init();
     ppi_init();
-    timers_init();
 
     while (1)
     {
