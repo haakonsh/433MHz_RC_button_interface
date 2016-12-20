@@ -10,16 +10,6 @@
  *
  */
 
-/** @file
- * @defgroup nrf_dev_timer_example_main main.c
- * @{
- * @ingroup nrf_dev_timer_example
- * @brief Timer Example Application main file.
- *
- * This file contains the source code for a sample application using Timer0.
- *
- */
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -35,11 +25,11 @@
 #include "nrf_drv_timer.h"
 #include "main.h"
 
-// // TODO: 1. Detect the preamble accurately, and signal the user.
+// // TODO: 1. Detect the preamble accurately, and signal the user. V
 //
-// // TODO: 2. Port the RTC + pin sampler to TIMER + pin sampler.
+// // TODO: 2. Port the RTC + pin sampler to TIMER + pin sampler.   V
 //
-// // TODO: 3. Merge 1. and 2.
+// // TODO: 3. Merge 1. and 2.                                      V
 //
 // // TODO: 4. Read DATA bits and turn on DK LED's.
 //
@@ -73,13 +63,15 @@ void timers_init(void)
     APP_ERROR_CHECK(err_code);
 
     // Set compare channel to trigger interrupts
-    nrf_drv_timer_compare(&TIMER1, NRF_TIMER_CC_CHANNEL0, CLK/8, true);
     nrf_drv_timer_compare(&TIMER2, NRF_TIMER_CC_CHANNEL0, CLK/8, true);
 
+    /*  ___
+       |  |________| = 1480us (DATA_L = 0b1000). CLK/8 = 1480us/8 = 185us --> sample the midpoint of each 'bit'*/
     nrf_drv_timer_extended_compare(
-        &TIMER1, NRF_TIMER_CC_CHANNEL1, (CLK/8) * 2, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
+        &TIMER1, NRF_TIMER_CC_CHANNEL1, CLK/8, NRF_TIMER_SHORT_COMPARE0_CLEAR_MASK, true);
+    //CLK/4 = 1480us/4 = 370us --> reset the timer after each 'bit'*/
     nrf_drv_timer_extended_compare(
-        &TIMER2, NRF_TIMER_CC_CHANNEL1, (CLK/8) * 2, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
+        &TIMER2, NRF_TIMER_CC_CHANNEL1, CLK/4, NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK, true);
 
     //enable timer instances
     nrf_drv_timer_enable(&TIMER1);
@@ -87,6 +79,12 @@ void timers_init(void)
 
 }
 
+/* handler used to detect the preamble, it will sample the 'input_pin' and increment the variable
+'value' if the pin state is high. After 20 samples if none of the samples were high, a preamble is detected,
+and a GPIOTE event is enabled. The GPIOTE will start the TIMER2 when the input_pin changes state from low to high.
+
+_____          count = 20       _____
+    |____________________|_____|                             */
 void timer1_evt_handler(nrf_timer_event_t event_type, void* p_context)
 {
     static uint8_t count, value;
@@ -95,27 +93,62 @@ void timer1_evt_handler(nrf_timer_event_t event_type, void* p_context)
 
     count++;
 
-    if(count == 20){
+    if(count == 20){      //TODO tweak value
         count = 0;
         if(!value){
-                        
-            //nrf_gpio_pin_toggle(OUTPUT_PIN);
             nrf_drv_gpiote_in_event_enable(input_pin, false);
+            nrf_gpio_pin_toggle(LED1);
             nrf_drv_timer_pause(&TIMER1);
         }
         value = 0;
     }
 
 }
-
+/* handler used to sample the DATA bits */
 void timer2_evt_handler(nrf_timer_event_t evt_type, void* p_context)
 {
+    // The GPIOTE event is only used to start the bit sampling sequence that follows the preamble
+    nrf_drv_gpiote_in_event_disable(input_pin);
+
+    uint32_t data = 0;
     rx_to_buffer(evt_type, &buffer_4);
     if(message_received){
         bit_decode(&buffer_4, &buffer);
-        // send 'buffer' to UART
+        data = buffer & DATA_msk; // only interrested in the DATA bits
+        switch(data)
+        {//TODO If you're not using our DK, set breakpoints in the CASEs for debugging.
+            case 1:
+                //nrf_gpio_pin_clear(LED1);
+                nrf_gpio_pin_toggle(LED1);
+                break;
+            case 2:
+                nrf_gpio_pin_clear(LED2);
+                //nrf_gpio_pin_toggle(LED1);
+                break;
+            case 3:
+                nrf_gpio_pin_clear(LED3);
+                //nrf_gpio_pin_toggle(LED1);
+                break;
+            case 4:
+                nrf_gpio_pin_clear(LED4);
+                //nrf_gpio_pin_toggle(LED1);
+                break;
+            default:
+                nrf_gpio_pin_toggle(LED1);
+                nrf_gpio_pin_toggle(LED2);
+                nrf_gpio_pin_toggle(LED3);
+                nrf_gpio_pin_toggle(LED4);
+                break;
+        }
+
         nrf_drv_timer_resume(&TIMER1);
+        //nrf_drv_gpiote_in_event_enable(input_pin, false);
         message_received = false;
+
+        nrf_gpio_pin_set(LED1);
+        nrf_gpio_pin_set(LED2);
+        nrf_gpio_pin_set(LED3);
+        nrf_gpio_pin_set(LED4);
     }
 }
 
@@ -127,12 +160,13 @@ void gpiote_init(void)
     APP_ERROR_CHECK(err_code);
 
     nrf_drv_gpiote_in_config_t input_pin_cfg = GPIOTE_CONFIG_IN_SENSE_LOTOHI(true);
-    input_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN;
+    input_pin_cfg.pull = NRF_GPIO_PIN_PULLDOWN; // TODO Optional, tweak pullup/down or no pull...
 
     err_code = nrf_drv_gpiote_in_init(input_pin, &input_pin_cfg, NULL);
     APP_ERROR_CHECK(err_code);
 }
 
+// the PPI is used to connect the pin state change(GPIOTE_IN_EVENT) on the input_pin to the timer (NRF_TIMER_TASK_START)
 void ppi_init(void)
 {
     ret_code_t err_code;
@@ -157,13 +191,27 @@ void ppi_init(void)
 
 }
 
+// for developement purposes with the nRF52DK
+void leds_init(void)
+{
+    nrf_gpio_cfg_output(LED1);
+    nrf_gpio_cfg_output(LED1);
+    nrf_gpio_cfg_output(LED1);
+    nrf_gpio_cfg_output(LED1);
+
+    nrf_gpio_pin_set(LED1);
+    nrf_gpio_pin_set(LED2);
+    nrf_gpio_pin_set(LED3);
+    nrf_gpio_pin_set(LED4);
+}
+
 /**
  * @brief Function for main application entry.
  */
 int main(void)
 {
-    nrf_gpio_cfg_input(INPUT_PIN, NRF_GPIO_PIN_PULLDOWN);
-    nrf_gpio_cfg_output(OUTPUT_PIN);
+    nrf_gpio_cfg_input(INPUT_PIN, NRF_GPIO_PIN_PULLUP);
+    leds_init();
 
     timers_init();
     gpiote_init();
@@ -171,9 +219,9 @@ int main(void)
 
     while (1)
     {
-        //__WFE();    //replace with the soft_device sleep function.
-        //__SEV();
-        //__WFE();
+        __WFE();    //TODO replace with the soft_device sleep function.
+        __SEV();
+        __WFE();
 
     }
 }

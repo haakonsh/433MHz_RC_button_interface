@@ -1,8 +1,11 @@
 #include "nrf_drv_timer.h"
 #include "nrf_drv_gpiote.h"
 
-#define INPUT_PIN                       4
-#define OUTPUT_PIN                      17
+#define INPUT_PIN                       4   //TODO shoose input_pin
+#define LED1                            17  //TODO if you're not using the DK remove all mention of LEDs
+#define LED2                            18
+#define LED3                            19
+#define LED4                            20
 
 const extern nrf_drv_timer_t TIMER1;
 const extern nrf_drv_timer_t TIMER2;
